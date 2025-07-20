@@ -1,0 +1,162 @@
+/*
+ * Copyright 2020 Digi Dinos JSC. All rights reserved.
+ * Email: tech@digidinos.com.
+ */
+
+/**
+ * SCSS common styles
+ */
+
+ @font-face {
+  font-family: 'BIZ UDPGothic';
+  src: url('../fonts/BIZUDPGothic_Regular.ttf');
+}
+
+html, body {
+  font-family: 'BIZ UDPGothic', sans-serif;
+}
+.text-right {
+  text-align: right;
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+img {
+  max-width: 100%;
+}
+
+.min-w-100 {
+  min-width: 100px !important;
+}
+
+.text-center {
+  text-align: center !important;
+}
+.text-left {
+  text-align: right !important;
+}
+
+.ant-table {
+  table {
+    border-top: 1px solid #e8e8e8;
+  }
+}
+
+.ant-form-item-label {
+  white-space: normal;
+  line-height: 1.5;
+  padding-top: 9px;
+  padding-right: 5px;
+  @include mq(max_xs) {
+    padding: 0 0 3px 0;
+  }
+  > label {
+    &:after {
+      margin-right: 0;
+    }
+  }
+}
+
+.ant-select {
+  width: 100%;
+}
+
+.ant-modal-root:not(.ant-modal-confirm) {
+  .ant-modal {
+    @include mq(max_xl) {
+      max-width: 1536px;
+    }
+    @include mq(max_lg) {
+      max-width: 95%;
+    }
+
+    .ant-modal-body {
+      padding: 0;
+    }
+  }
+}
+
+/* -----------------------------------------------------------
+  Spacing
+----------------------------------------------------------- */
+@each $prop, $abbrev in (margin: m, padding: p) {
+  @each $size, $length in $spacers {
+    .#{$abbrev}-#{$size} { #{$prop}: $length !important; }
+    .#{$abbrev}t-#{$size},
+    .#{$abbrev}y-#{$size} {
+      #{$prop}-top: $length !important;
+    }
+    .#{$abbrev}r-#{$size},
+    .#{$abbrev}x-#{$size} {
+      #{$prop}-right: $length !important;
+    }
+    .#{$abbrev}b-#{$size},
+    .#{$abbrev}y-#{$size} {
+      #{$prop}-bottom: $length !important;
+    }
+    .#{$abbrev}l-#{$size},
+    .#{$abbrev}x-#{$size} {
+      #{$prop}-left: $length !important;
+    }
+  }
+}
+
+.rate-column {
+  .ant-rate-star {
+    div {
+      .anticon-star{
+        font-size: 16px !important;
+      }
+    }
+  }
+}
+.ant-modal-title {
+  font-weight: 700;
+  font-size: 1.2em;
+}
+.svg-inline--fa {
+  display: inline-block;
+  font-size: inherit;
+  height: 1em;
+  vertical-align: -0.125em;
+}
+
+/* -----------------------------------------------------------
+  Custom sideBar
+----------------------------------------------------------- */
+.ant-menu-dark, .ant-menu-dark .ant-menu-sub {
+  color: rgba(255, 255, 255, 0.65);
+  background: $sidebar-color;
+}
+.ant-layout-sider-children,
+.ant-layout-sider-trigger,
+.ant-menu-dark .ant-menu-inline.ant-menu-sub {
+  background: $sidebar-color ;
+  box-shadow: none;
+}
+.ant-menu.ant-menu-dark .ant-menu-item-selected, .ant-menu-submenu-popup.ant-menu-dark .ant-menu-item-selected {
+  background-color: $light-blue;
+}
+li.ant-menu-item {
+  height: 60px !important;
+  line-height: 60px !important;
+  margin: 0px !important;
+}
+.short-report{
+  .ant-drawer-content-wrapper{
+    .ant-drawer-content{
+      .ant-drawer-wrapper-body{
+        .ant-drawer-body{
+          padding: 0!important;
+        }
+      }
+    }
+  }
+}
+.ant-layout-content {
+  background: #ffffff;
+}

@@ -1,0 +1,363 @@
+stages:
+  - build
+  - deploy
+  - sync
+  - database
+.setting-ssh-dev: &setting-ssh-dev |
+  eval $(ssh-agent -s) && echo "$DEV_SSH_KEY" | ssh-add -
+  mkdir -p ~/.ssh
+  echo -e "Host *\n\tStrictHostKeyChecking no\n\tControlMaster auto\n\tControlPath /tmp/ansible-%r@%h:%p\n\tControlPersist 15m\n\tPreferredAuthentications publickey
+  \n\n" > ~/.ssh/config
+  chmod go-wrx ~/.ssh
+  chmod go-w ~/.ssh/config
+.setting-ssh-phase2: &setting-ssh-phase2 |
+  eval $(ssh-agent -s) && echo "$PHASE2_SSH_KEY" | ssh-add -
+  mkdir -p ~/.ssh
+  echo -e "Host *\n\tStrictHostKeyChecking no\n\tControlMaster auto\n\tControlPath /tmp/ansible-%r@%h:%p\n\tControlPersist 15m\n\tPreferredAuthentications publickey
+  \n\n" > ~/.ssh/config
+  chmod go-wrx ~/.ssh
+  chmod go-w ~/.ssh/config
+
+####################### DEV ##############
+composer_dev:
+  stage: build
+  script:
+    - echo "${DEV_ENV}" > .env
+    - /usr/local/bin/composer install
+    - php artisan migrate --force
+    # php artisan db:seed
+    - php artisan key:generate
+    #- php artisan jwt:secret
+    #- php artisan passport:install --force
+    - echo "$DEV_PASSPORT_PRIVATE_KEY" > storage/oauth-private.key
+    - echo "$DEV_PASSPORT_PUBLIC_KEY" > storage/oauth-public.key
+    #- php artisan l5-swagger:generate
+    - php artisan optimize:clear
+    - php artisan config:cache
+  artifacts:
+    paths:
+      - vendor/
+      - storage/
+  tags:
+    - dev
+  only:
+    - develop
+  when: on_success
+
+sync2_sns_dev:
+  stage: sync
+  cache: {}
+  script:
+    - *setting-ssh-dev
+    - echo "${DEV_ENV}" > .env
+    - ssh -ttttttttttt $DEV_DEPLOY_USER@$DEV_BATCH_HOST "sudo chown -R $DEV_DEPLOY_USER:$DEV_DEPLOY_USER $DEV_DEPLOY_DIR/"
+    - rsync -c -alv --ignore-times --delete --exclude='.git' --exclude=storage/logs  ./ $DEV_DEPLOY_USER@$DEV_BATCH_HOST:$DEV_DEPLOY_DIR/
+    - ssh -ttttttttttt $DEV_DEPLOY_USER@$DEV_BATCH_HOST "cd $DEV_DEPLOY_DIR && sudo php artisan storage:link"
+    - ssh -ttttttttttt $DEV_DEPLOY_USER@$DEV_BATCH_HOST "sudo chown -R nginx:nginx $DEV_DEPLOY_DIR/"
+    - ssh -ttttttttttt $DEV_DEPLOY_USER@$DEV_BATCH_HOST "sudo find $DEV_DEPLOY_DIR/ -type d -exec chmod 755 -R {} \;"
+    - ssh -ttttttttttt $DEV_DEPLOY_USER@$DEV_BATCH_HOST "sudo find $DEV_DEPLOY_DIR/ -type f -exec chmod 644 {} \;"
+    - ssh -ttttttttttt $DEV_DEPLOY_USER@$DEV_BATCH_HOST "sudo chmod 777 -R $DEV_DEPLOY_DIR/storage/logs/"
+    - ssh $DEV_DEPLOY_USER@$DEV_BATCH_HOST "cd $DEV_DEPLOY_DIR && sudo php artisan optimize:clear"
+    - ssh $DEV_DEPLOY_USER@$DEV_BATCH_HOST "cd $DEV_DEPLOY_DIR && sudo php artisan config:cache"
+
+  dependencies:
+    - composer_dev
+  tags:
+    - dev
+  only:
+    - develop
+  when: on_success
+
+dbmigration_sns_dev:
+  #image: digidinostrungdd/phpcomposer:7.4
+  stage: database
+  cache: {}
+  script:
+    - *setting-ssh-dev
+    - ssh $DEV_DEPLOY_USER@$DEV_BATCH_HOST "cd $DEV_DEPLOY_DIR && sudo php artisan migrate --force"
+  dependencies:
+    - sync2_sns_dev
+  tags:
+    - dev
+  only:
+    - develop
+  when: on_success
+
+####################### END DEV ###########
+####################### STG ##############
+.setting-ssh-stg: &setting-ssh-stg |
+  eval $(ssh-agent -s) && echo "$STG_SSH_KEY" | ssh-add -
+  mkdir -p ~/.ssh
+  echo -e "Host *\n\tStrictHostKeyChecking no\n\tControlMaster auto\n\tControlPath /tmp/ansible-%r@%h:%p\n\tControlPersist 15m\n\tPreferredAuthentications publickey
+  \n\n" > ~/.ssh/config
+  chmod go-wrx ~/.ssh
+  chmod go-w ~/.ssh/config
+.setting-ssh-stg-batch: &setting-ssh-stg-batch |
+  eval $(ssh-agent -s) && echo "$STG_BATCH_SSH_KEY" | ssh-add -
+  mkdir -p ~/.ssh
+  echo -e "Host *\n\tStrictHostKeyChecking no\n\tControlMaster auto\n\tControlPath /tmp/ansible-%r@%h:%p\n\tControlPersist 15m\n\tPreferredAuthentications publickey
+  \n\n" > ~/.ssh/config
+  chmod go-wrx ~/.ssh
+  chmod go-w ~/.ssh/config
+
+composer_stg:
+  stage: build
+  script:
+    - echo "${STG_ENV}" > .env
+    - /usr/local/bin/composer install
+    - php artisan migrate --force
+    # php artisan db:seed
+    - php artisan key:generate
+    #- php artisan jwt:secret
+    #- php artisan passport:install --force
+    - echo "$STG_PASSPORT_PRIVATE_KEY" > storage/oauth-private.key
+    - echo "$STG_PASSPORT_PUBLIC_KEY" > storage/oauth-public.key
+    #- php artisan l5-swagger:generate
+    - php artisan optimize:clear
+    - php artisan config:cache
+  artifacts:
+    paths:
+      - vendor/
+      - storage/
+  tags:
+    - stg
+  only:
+    - staging
+  when: on_success
+
+deploy_sns_stg:
+  stage: deploy
+  cache: {}
+  script:
+    - *setting-ssh-stg
+    - echo "${STG_ENV}" > .env
+    - ssh -ttttttttttt $STG_DEPLOY_USER@$STG_HOST "sudo chown -R $STG_DEPLOY_USER:$STG_DEPLOY_USER $STG_DEPLOY_DIR/"
+    - rsync -c -alv --ignore-times --delete --exclude='.git' --exclude=storage/logs  ./ $STG_DEPLOY_USER@$STG_HOST:$STG_DEPLOY_DIR/
+    - ssh -ttttttttttt $STG_DEPLOY_USER@$STG_HOST "cd $STG_DEPLOY_DIR && sudo php artisan storage:link"
+    - ssh -ttttttttttt $STG_DEPLOY_USER@$STG_HOST "sudo chown -R nginx:nginx $STG_DEPLOY_DIR/"
+    - ssh -ttttttttttt $STG_DEPLOY_USER@$STG_HOST "sudo find $STG_DEPLOY_DIR/ -type d -exec chmod 755 -R {} \;"
+    - ssh -ttttttttttt $STG_DEPLOY_USER@$STG_HOST "sudo find $STG_DEPLOY_DIR/ -type f -exec chmod 644 {} \;"
+    - ssh -ttttttttttt $STG_DEPLOY_USER@$STG_HOST "sudo chmod 777 -R $STG_DEPLOY_DIR/storage/logs/"
+    - ssh $STG_DEPLOY_USER@$STG_HOST "cd $STG_DEPLOY_DIR && sudo php artisan optimize:clear"
+    - ssh $STG_DEPLOY_USER@$STG_HOST "cd $STG_DEPLOY_DIR && sudo php artisan config:cache"
+
+  dependencies:
+    - composer_stg
+  tags:
+    - stg
+  only:
+    - staging
+  when: on_success
+
+sync2_sns_stg:
+  stage: sync
+  cache: {}
+  script:
+    - *setting-ssh-stg-batch
+    - echo "${STG_ENV}" > .env
+    - ssh -ttttttttttt $STG_DEPLOY_USER@$STG_BATCH_HOST "sudo chown -R $STG_DEPLOY_USER:$STG_DEPLOY_USER $STG_DEPLOY_DIR/"
+    - rsync -c -alv --ignore-times --delete --exclude='.git' --exclude=storage/logs  ./ $STG_DEPLOY_USER@$STG_BATCH_HOST:$STG_DEPLOY_DIR/
+    - ssh -ttttttttttt $STG_DEPLOY_USER@$STG_BATCH_HOST "cd $STG_DEPLOY_DIR && sudo php artisan storage:link"
+    - ssh -ttttttttttt $STG_DEPLOY_USER@$STG_BATCH_HOST "sudo chown -R nginx:nginx $STG_DEPLOY_DIR/"
+    - ssh -ttttttttttt $STG_DEPLOY_USER@$STG_BATCH_HOST "sudo find $STG_DEPLOY_DIR/ -type d -exec chmod 755 -R {} \;"
+    - ssh -ttttttttttt $STG_DEPLOY_USER@$STG_BATCH_HOST "sudo find $STG_DEPLOY_DIR/ -type f -exec chmod 644 {} \;"
+    - ssh -ttttttttttt $STG_DEPLOY_USER@$STG_BATCH_HOST "sudo chmod 777 -R $STG_DEPLOY_DIR/storage/"
+    - ssh $STG_DEPLOY_USER@$STG_BATCH_HOST "cd $STG_DEPLOY_DIR && sudo php artisan optimize:clear"
+    - ssh $STG_DEPLOY_USER@$STG_BATCH_HOST "cd $STG_DEPLOY_DIR && sudo php artisan config:cache"
+    - ssh $STG_DEPLOY_USER@$STG_BATCH_HOST "sudo systemctl restart supervisord"
+
+  dependencies:
+    - composer_stg
+  tags:
+    - stg
+  only:
+    - staging
+  when: on_success
+
+dbmigration_sns_stg:
+  #image: digidinostrungdd/phpcomposer:7.4
+  stage: database
+  cache: {}
+  script:
+    - *setting-ssh-stg
+    - ssh $STG_DEPLOY_USER@$STG_BATCH_HOST "cd $STG_DEPLOY_DIR && sudo php artisan migrate --force"
+  dependencies:
+    - sync2_sns_stg
+  tags:
+    - stg
+  only:
+    - staging
+  when: on_success
+
+####################### END STG ###########
+####################### PHASE2 ##############
+composer_phase2:
+  stage: build
+  script:
+    - echo "${PHASE2_ENV}" > .env
+    - /usr/local/bin/composer install
+    - php artisan migrate --force
+    # php artisan db:seed
+    - php artisan key:generate
+    #- php artisan jwt:secret
+    #- php artisan passport:install --force
+    - echo "$PHASE2_PASSPORT_PRIVATE_KEY" > storage/oauth-private.key
+    - echo "$PHASE2_PASSPORT_PUBLIC_KEY" > storage/oauth-public.key
+    #- php artisan l5-swagger:generate
+    - php artisan optimize:clear
+    - php artisan config:cache
+  artifacts:
+    paths:
+      - vendor/
+      - storage/
+  tags:
+    - dev
+  only:
+    - develop-phase2
+  when: on_success
+
+sync2_sns_phase2:
+  stage: sync
+  cache: {}
+  script:
+    - *setting-ssh-phase2
+    - echo "${PHASE2_ENV}" > .env
+    - ssh -ttttttttttt $PHASE2_DEPLOY_USER@$PHASE2_BATCH_HOST "sudo chown -R $PHASE2_DEPLOY_USER:$PHASE2_DEPLOY_USER $PHASE2_DEPLOY_DIR/"
+    - rsync -c -alv --ignore-times --delete --exclude='.git' --exclude=storage/logs  ./ $PHASE2_DEPLOY_USER@$PHASE2_BATCH_HOST:$PHASE2_DEPLOY_DIR/
+    - ssh -ttttttttttt $PHASE2_DEPLOY_USER@$PHASE2_BATCH_HOST "cd $PHASE2_DEPLOY_DIR && sudo php artisan storage:link"
+    - ssh -ttttttttttt $PHASE2_DEPLOY_USER@$PHASE2_BATCH_HOST "sudo chown -R nginx:nginx $PHASE2_DEPLOY_DIR/"
+    - ssh -ttttttttttt $PHASE2_DEPLOY_USER@$PHASE2_BATCH_HOST "sudo find $PHASE2_DEPLOY_DIR/ -type d -exec chmod 755 -R {} \;"
+    - ssh -ttttttttttt $PHASE2_DEPLOY_USER@$PHASE2_BATCH_HOST "sudo find $PHASE2_DEPLOY_DIR/ -type f -exec chmod 644 {} \;"
+    - ssh -ttttttttttt $PHASE2_DEPLOY_USER@$PHASE2_BATCH_HOST "sudo chmod 777 -R $PHASE2_DEPLOY_DIR/storage/logs/"
+    - ssh $PHASE2_DEPLOY_USER@$PHASE2_BATCH_HOST "cd $PHASE2_DEPLOY_DIR && sudo php artisan optimize:clear"
+    - ssh $PHASE2_DEPLOY_USER@$PHASE2_BATCH_HOST "cd $PHASE2_DEPLOY_DIR && sudo php artisan config:cache"
+
+  dependencies:
+    - composer_phase2
+  tags:
+    - dev
+  only:
+    - develop-phase2
+  when: on_success
+
+dbmigration_sns_phase2:
+  #image: digidinostrungdd/phpcomposer:7.4
+  stage: database
+  cache: {}
+  script:
+    - *setting-ssh-phase2
+    - ssh $PHASE2_DEPLOY_USER@$PHASE2_BATCH_HOST "cd $PHASE2_DEPLOY_DIR && sudo php artisan migrate --force"
+  dependencies:
+    - sync2_sns_phase2
+  tags:
+    - dev
+  only:
+    - develop-phase2
+  when: on_success
+
+####################### END PHASE2 ###########
+####################### PROD ##############
+.setting-ssh-prd: &setting-ssh-prd |
+  eval $(ssh-agent -s) && echo "$PRD_SSH_KEY" | ssh-add -
+  mkdir -p ~/.ssh
+  echo -e "Host *\n\tStrictHostKeyChecking no\n\tControlMaster auto\n\tControlPath /tmp/ansible-%r@%h:%p\n\tControlPersist 15m\n\tPreferredAuthentications publickey
+  \n\n" > ~/.ssh/config
+  chmod go-wrx ~/.ssh
+  chmod go-w ~/.ssh/config
+.setting-ssh-prd-batch: &setting-ssh-prd-batch |
+  eval $(ssh-agent -s) && echo "$PROD_BATCH_SSH_KEY" | ssh-add -
+  mkdir -p ~/.ssh
+  echo -e "Host *\n\tStrictHostKeyChecking no\n\tControlMaster auto\n\tControlPath /tmp/ansible-%r@%h:%p\n\tControlPersist 15m\n\tPreferredAuthentications publickey
+  \n\n" > ~/.ssh/config
+  chmod go-wrx ~/.ssh
+  chmod go-w ~/.ssh/config
+
+composer_prd:
+  stage: build
+  script:
+    - echo "${PRD_ENV}" > .env
+    - /usr/local/bin/composer install --no-dev
+    - php artisan migrate --force
+    # php artisan db:seed
+    - php artisan key:generate
+    #- php artisan jwt:secret
+    #- php artisan passport:install --force
+    - echo "$PRD_PASSPORT_PRIVATE_KEY" > storage/oauth-private.key
+    - echo "$PRD_PASSPORT_PUBLIC_KEY" > storage/oauth-public.key
+    #- php artisan l5-swagger:generate
+    - php artisan optimize:clear
+    - php artisan config:cache
+  artifacts:
+    paths:
+      - vendor/
+      - storage/
+  tags:
+    - prod
+  only:
+    - prod
+  when: on_success
+
+deploy_sns_prd:
+  stage: deploy
+  cache: {}
+  script:
+    - *setting-ssh-prd
+    - echo "${PRD_ENV}" > .env
+    - ssh -ttttttttttt $PRD_DEPLOY_USER@$PRD_HOST "sudo chown -R $PRD_DEPLOY_USER:$PRD_DEPLOY_USER $PRD_DEPLOY_DIR/"
+    - rsync -c -alv --ignore-times --delete --exclude='.git' --exclude=storage/logs  ./ $PRD_DEPLOY_USER@$PRD_HOST:$PRD_DEPLOY_DIR/
+    - ssh -ttttttttttt $PRD_DEPLOY_USER@$PRD_HOST "cd $PRD_DEPLOY_DIR && sudo php artisan storage:link"
+    - ssh -ttttttttttt $PRD_DEPLOY_USER@$PRD_HOST "sudo chown -R nginx:nginx $PRD_DEPLOY_DIR/"
+    - ssh -ttttttttttt $PRD_DEPLOY_USER@$PRD_HOST "sudo find $PRD_DEPLOY_DIR/ -type d -exec chmod 755 -R {} \;"
+    - ssh -ttttttttttt $PRD_DEPLOY_USER@$PRD_HOST "sudo find $PRD_DEPLOY_DIR/ -type f -exec chmod 644 {} \;"
+    - ssh -ttttttttttt $PRD_DEPLOY_USER@$PRD_HOST "sudo chmod 777 -R $PRD_DEPLOY_DIR/storage/"
+    - ssh $PRD_DEPLOY_USER@$PRD_HOST "cd $PRD_DEPLOY_DIR && sudo php artisan optimize:clear"
+    - ssh $PRD_DEPLOY_USER@$PRD_HOST "cd $PRD_DEPLOY_DIR && sudo php artisan config:cache"
+
+  dependencies:
+    - composer_prd
+  tags:
+    - prod
+  only:
+    - prod
+  when: on_success
+
+sync2_sns_prd:
+  stage: sync
+  cache: {}
+  script:
+    - *setting-ssh-prd-batch
+    - echo "${PRD_ENV}" > .env
+    - ssh -ttttttttttt $PRD_DEPLOY_USER@$PRD_BATCH_HOST "sudo chown -R $PRD_DEPLOY_USER:$PRD_DEPLOY_USER $PRD_DEPLOY_DIR/"
+    - rsync -c -alv --ignore-times --delete --exclude='.git' --exclude=storage/logs  ./ $PRD_DEPLOY_USER@$PRD_BATCH_HOST:$PRD_DEPLOY_DIR/
+    - ssh -ttttttttttt $PRD_DEPLOY_USER@$PRD_BATCH_HOST "cd $PRD_DEPLOY_DIR && sudo php artisan storage:link"
+    - ssh -ttttttttttt $PRD_DEPLOY_USER@$PRD_BATCH_HOST "sudo chown -R nginx:nginx $PRD_DEPLOY_DIR/"
+    - ssh -ttttttttttt $PRD_DEPLOY_USER@$PRD_BATCH_HOST "sudo find $PRD_DEPLOY_DIR/ -type d -exec chmod 755 -R {} \;"
+    - ssh -ttttttttttt $PRD_DEPLOY_USER@$PRD_BATCH_HOST "sudo find $PRD_DEPLOY_DIR/ -type f -exec chmod 644 {} \;"
+    - ssh -ttttttttttt $PRD_DEPLOY_USER@$PRD_BATCH_HOST "sudo chmod 777 -R $PRD_DEPLOY_DIR/storage/"
+    - ssh $PRD_DEPLOY_USER@$PRD_BATCH_HOST "cd $PRD_DEPLOY_DIR && sudo php artisan optimize:clear"
+    - ssh $PRD_DEPLOY_USER@$PRD_BATCH_HOST "cd $PRD_DEPLOY_DIR && sudo php artisan config:cache"
+
+  dependencies:
+    - composer_prd
+  tags:
+    - prod
+  only:
+    - prod
+  when: on_success
+
+dbmigration_sns_prod:
+  #image: digidinostrungdd/phpcomposer:7.4
+  stage: database
+  cache: {}
+  script:
+    - *setting-ssh-prd-batch
+    - ssh $PRD_DEPLOY_USER@$PRD_BATCH_HOST "cd $PRD_DEPLOY_DIR && sudo php artisan migrate --force"
+  dependencies:
+    - sync2_sns_prd
+  tags:
+    - prod
+  only:
+    - prod
+  when: on_success
+
+####################### END PRD ###########

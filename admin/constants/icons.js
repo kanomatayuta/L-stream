@@ -1,0 +1,29 @@
+export default {
+  solid: [
+    'faBalanceScale',
+    'faCalendar',
+    'faCaretDown',
+    'faCaretUp',
+    'faCheck',
+    'faCircle',
+    'faEnvelope',
+    'faEraser',
+    'faEye',
+    'faHandScissors',
+    'faHeading',
+    'faHeart',
+    'faHome',
+    'faIndustry',
+    'faLock',
+    'faPencilAlt',
+    'faPlusCircle',
+    'faSearch',
+    'faSignOutAlt',
+    'faTags',
+    'faTrashAlt',
+    'faUserCog',
+    'faUserFriends',
+    'faUserTie',
+    'faBan'
+  ]
+}

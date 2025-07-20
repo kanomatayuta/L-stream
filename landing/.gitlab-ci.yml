@@ -1,0 +1,55 @@
+stages:
+  #- build
+  - deploy
+  #- scan
+
+.setting-ssh: &setting-ssh |
+  eval $(ssh-agent -s) && echo "$STG_BATCH_SSH_KEY" | ssh-add -
+  mkdir -p ~/.ssh
+  echo -e "Host *\n\tStrictHostKeyChecking no\n\tControlMaster auto\n\tControlPath /tmp/ansible-%r@%h:%p\n\tControlPersist 15m\n\tPreferredAuthentications publickey
+  \n\n" > ~/.ssh/config
+  chmod go-wrx ~/.ssh
+
+########################STG#################################  
+
+sync2batch_stg:
+  stage: deploy
+  cache: {}
+  script:
+    - *setting-ssh
+    - ssh -ttttttttttt $STG_DEPLOY_USER@$STG_BATCH_HOST "sudo chown -R $STG_DEPLOY_USER:$STG_DEPLOY_USER $STG_DEPLOY_DIR/"
+    - rsync -c -alv --ignore-times --delete --exclude='.git' ./ $STG_DEPLOY_USER@$STG_BATCH_HOST:$STG_DEPLOY_DIR/
+    - ssh -ttttttttttt $STG_DEPLOY_USER@$STG_BATCH_HOST "sudo chown -R nginx:nginx $STG_DEPLOY_DIR/"
+    - ssh -ttttttttttt $STG_DEPLOY_USER@$STG_BATCH_HOST  "sudo find $STG_DEPLOY_DIR/ -type d -exec chmod 755 -R {} \;"
+    - ssh -ttttttttttt $STG_DEPLOY_USER@$STG_BATCH_HOST  "sudo find $STG_DEPLOY_DIR/ -type f -exec chmod 644 {} \;"
+
+  tags:
+    - stg
+  only:
+    - staging
+  when: on_success
+  ########################PRD#################################  
+.setting-sshprd: &setting-ssh-prd |
+  eval $(ssh-agent -s) && echo "$PRD_BATCH_SSH_KEY" | ssh-add -
+  mkdir -p ~/.ssh
+  echo -e "Host *\n\tStrictHostKeyChecking no\n\tControlMaster auto\n\tControlPath /tmp/ansible-%r@%h:%p\n\tControlPersist 15m\n\tPreferredAuthentications publickey
+  \n\n" > ~/.ssh/config
+  chmod go-wrx ~/.ssh
+
+
+sync2batch_prd:
+  stage: deploy
+  cache: {}
+  script:
+    - *setting-ssh-prd
+    - ssh -ttttttttttt $PRD_DEPLOY_USER@$PRD_HOST "sudo chown -R $PRD_DEPLOY_USER:$PRD_DEPLOY_USER $PRD_DEPLOY_DIR/"
+    - rsync -c -alv --ignore-times --delete --exclude='.git' ./ $PRD_DEPLOY_USER@$PRD_HOST:$PRD_DEPLOY_DIR/
+    - ssh -ttttttttttt $PRD_DEPLOY_USER@$PRD_HOST "sudo chown -R nginx:nginx $PRD_DEPLOY_DIR/"
+    - ssh -ttttttttttt $PRD_DEPLOY_USER@$PRD_HOST  "sudo find $PRD_DEPLOY_DIR/ -type d -exec chmod 755 -R {} \;"
+    - ssh -ttttttttttt $PRD_DEPLOY_USER@$PRD_HOST  "sudo find $PRD_DEPLOY_DIR/ -type f -exec chmod 644 {} \;"
+
+  tags:
+    - prod
+  only:
+    - prod
+  when: on_success

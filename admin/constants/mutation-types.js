@@ -1,0 +1,3 @@
+export const SET_LOADING = 'SET_LOADING'
+export const SET_IS_PC = 'SET_IS_PC'
+export const SET_IS_SIDEBAR_COLLAPSED = 'SET_IS_SIDEBAR_COLLAPSED'
